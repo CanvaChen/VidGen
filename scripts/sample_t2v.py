@@ -151,19 +151,20 @@ if __name__ == "__main__":
                 #if d.strip() not in args.prompts:
             args.cond_image_file = None
 
-    if args.pdb_debug:
-        pass
-    else:
-        torch.distributed.init_process_group(
-            backend='nccl',
-            world_size=int(os.getenv('WORLD_SIZE', '1')),
-            rank=int(os.getenv('RANK', '0')),
-        )
-        torch.cuda.set_device(int(os.getenv('LOCAL_RANK', 0)))
+    # if args.pdb_debug:
+    #     pass
+    # else:
+    #     torch.distributed.init_process_group(
+    #         backend='nccl',
+    #         world_size=int(os.getenv('WORLD_SIZE', '1')),
+    #         rank=int(os.getenv('RANK', '0')),
+    #     )
+    #     torch.cuda.set_device(int(os.getenv('LOCAL_RANK', 0)))
     
     torch.manual_seed(args.seed)
     torch.set_grad_enabled(False)
-    device = "cuda"
+    device = "cuda:0"
+    device2 = "cuda:1"
 
     if args.precision == 'bf16':
         dtype = torch.bfloat16
@@ -197,7 +198,7 @@ if __name__ == "__main__":
 
     else:
         raise ValueError()
-    videovae = videovae.eval().to(device)
+    videovae = videovae.eval().to(device, dtype)
   
     args.num_frames_video = model_config.num_frames_video
     assert args.num_frames_video == videovae_config.ddconfig.t_frames, \
@@ -243,10 +244,10 @@ if __name__ == "__main__":
         text_encoder_config = dict(model_config.text_encoder)
         text_encoder_config.pop('type')
         text_encoder_config['shardformer'] = False
-        text_encoder = T5Encoder(**text_encoder_config, device=device)    # T5 must be fp32
+        text_encoder = T5Encoder(**text_encoder_config, device=device2)    # T5 must be fp32
         for p in text_encoder.t5.model.parameters():
             p.requires_grad = False
-        text_encoder.t5.model.eval().to(device)
+        # text_encoder.t5.model.eval().to(device)
     else:
         raise ValueError()
 
@@ -268,13 +269,13 @@ if __name__ == "__main__":
     model.eval().to(device)
 
     dataset = SimpleDataset(prompts=args.prompts, cond_images=args.cond_image_file)
-    if args.pdb_debug:
-        sampler = None 
-    else:
-        sampler = InferenceSampler(len(dataset))
+    # if args.pdb_debug:
+    #     sampler = None
+    # else:
+    #     sampler = InferenceSampler(len(dataset))
     dataloader = torch.utils.data.DataLoader(
         dataset=dataset,
-        sampler=sampler,
+        # sampler=sampler,
         batch_size=1,
         num_workers=1,
         pin_memory=True,
@@ -295,8 +296,8 @@ if __name__ == "__main__":
 
             if args.prob_text_condition > 0:
                 text_cond_encode = text_encoder.encode([prompt])
-                y = text_cond_encode['y']                                                   # [1, 1, L, D]
-                y_mask = text_cond_encode['mask']                                           # [1, L]
+                y = text_cond_encode['y'].to(device)                                        # [1, 1, L, D]
+                y_mask = text_cond_encode['mask'].to(device)                                # [1, L]
                 null_y = model.y_embedder.y_embedding[None, None, :, :]                     # [1, 1, L, D]
             else:
                 y = y_mask = None

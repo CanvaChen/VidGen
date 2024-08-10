@@ -1,16 +1,10 @@
 
-MASTER_ADDR="localhost"
-MASTER_PORT="6666"
-NNODES=1
-NODE_RANK=0
-NGPUS_PER_NODE=$(nvidia-smi -L | wc -l)
-
 ####################################################
 pretain_model="./pretrain_model/vidgen/transformer"
 checkpoint=${pretain_model}/diffusion_pytorch_model.bin
 model_config="configs/model_config.yaml"
 
-num_slice_for_long_video=2
+num_slice_for_long_video=1
 resolution_height_video=512
 resolution_width_video=512
 
@@ -27,14 +21,7 @@ test_sample="configs/test_prompt.json"
 
 output_sample_dir="./sample_result"  #    
 
-python -m torch.distributed.launch \
-    --nnodes=$NNODES \
-    --node_rank=$NODE_RANK \
-    --nproc_per_node=$NGPUS_PER_NODE \
-    --master_addr=$MASTER_ADDR \
-    --master_port=$MASTER_PORT \
-    --use_env \
-    scripts/sample_t2v.py \
+python scripts/sample_t2v.py \
     --model_config ${model_config} \
     --checkpoint ${checkpoint} \
     \
